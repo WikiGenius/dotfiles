@@ -201,3 +201,5 @@ export SCM_CHECK=true
 # Load Bash It
 source "$BASH_IT"/bash_it.sh
 alias config='/usr/bin/git --git-dir=/home/elyamani/.cfg --work-tree=/home/elyamani'
+
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash
