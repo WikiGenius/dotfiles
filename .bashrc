@@ -1,205 +1,204 @@
-# ~/.bashrc: executed by bash(1) for non-login shells.
-# see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
-# for examples
+# ~/.bashrc — Fast, clean interactive shell for Muhammed Elyamani
+# ────────────────────────────────────────────────────────────────────────────
+# ❶ Bail out early for non-interactive shells
+[[ $- != *i* ]] && return
 
-# If not running interactively, don't do anything
-case $- in
-    *i*) ;;
-      *) return;;
-esac
+##############################################################################
+# 0 · Strict-mode helpers                                                    #
+##############################################################################
+set -o pipefail                      # fail pipeline if *any* element fails
+# set -o nounset                     # uncomment for paranoia: error on unset
 
-# don't put duplicate lines or lines starting with space in the history.
-# See bash(1) for more options
-HISTCONTROL=ignoreboth
+# Source a file only if it exists; silence its chatter
+_safe_source() { [[ -f "$1" ]] && source "$1" >/dev/null 2>&1 ; }
 
-# append to the history file, don't overwrite it
-shopt -s histappend
+##############################################################################
+# 1 · History & shell behaviour                                              #
+##############################################################################
+shopt -s histappend checkwinsize cmdhist nocaseglob autocd globstar
+HISTSIZE=5000
+HISTFILESIZE=10000
+HISTCONTROL=ignoreboth:erasedups
+HISTTIMEFORMAT='%F %T '            # show timestamps in reverse-i-search
 
-# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-HISTSIZE=1000
-HISTFILESIZE=2000
+##############################################################################
+# 2 · bash-completion (lightweight)                                          #
+##############################################################################
+_safe_source /usr/share/bash-completion/bash_completion
 
-# check the window size after each command and, if necessary,
-# update the values of LINES and COLUMNS.
-shopt -s checkwinsize
+##############################################################################
+# 3 · Bash-it (loaded **once** per session)                                  #
+##############################################################################
+export BASH_IT="$HOME/.bash_it"
+if [[ -s $BASH_IT/bash_it.sh && -z ${BASH_IT_BOOTSTRAPPED:-} ]]; then
+  export BASH_IT_BOOTSTRAPPED=1
+  export BASH_IT_THEME=''                       # Starship handles prompt
+  export BASH_IT_LOG_LEVEL=error                # hush verbose logging
+  _safe_source "$BASH_IT/bash_it.sh"
 
-# If set, the pattern "**" used in a pathname expansion context will
-# match all files and zero or more directories and subdirectories.
-#shopt -s globstar
-
-# make less more friendly for non-text input files, see lesspipe(1)
-[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
-
-# set variable identifying the chroot you work in (used in the prompt below)
-if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
-    debian_chroot=$(cat /etc/debian_chroot)
+  # Curated minimal enable set (runs only first time → cached)
+  _bash_it_cache="${XDG_CACHE_HOME:-$HOME/.cache}/bash-it.enabled"
+  mkdir -p "${_bash_it_cache%/*}"
+  if [[ ! -e "$_bash_it_cache" ]]; then
+    bash-it enable alias      general git
+    bash-it enable plugin     history
+    bash-it enable completion git
+    touch "$_bash_it_cache"
+  fi
 fi
 
-# set a fancy prompt (non-color, unless we know we "want" color)
-case "$TERM" in
-    xterm-color|*-256color) color_prompt=yes;;
-esac
-
-# uncomment for a colored prompt, if the terminal has the capability; turned
-# off by default to not distract the user: the focus in a terminal window
-# should be on the output of commands, not on the prompt
-#force_color_prompt=yes
-
-if [ -n "$force_color_prompt" ]; then
-    if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
-	# We have color support; assume it's compliant with Ecma-48
-	# (ISO/IEC-6429). (Lack of such support is extremely rare, and such
-	# a case would tend to support setf rather than setaf.)
-	color_prompt=yes
-    else
-	color_prompt=
-    fi
+##############################################################################
+# 4 · Prompt — Starship (fast cache)                                         #
+##############################################################################
+STARSHIP_ENABLED=0
+if command -v starship >/dev/null 2>&1; then
+  _starship_cache="${XDG_CACHE_HOME:-$HOME/.cache}/starship-init.bash"
+  # Re-generate cache after Starship upgrades
+  if [[ ! -s "$_starship_cache" || "$_starship_cache" -ot "$(command -v starship)" ]]; then
+    mkdir -p "${_starship_cache%/*}"
+    starship init bash --print-full-init >"$_starship_cache"
+  fi
+  _safe_source "$_starship_cache"
+  STARSHIP_ENABLED=1
 fi
 
-if [ "$color_prompt" = yes ]; then
-    PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+# Fallback prompt (executes each time in case Starship misbehaves)
+_fallback_prompt() { [[ -z $PS1 ]] && PS1='\u@\h:\w\$ '; }
+
+##############################################################################
+# 5 · ble.sh autosuggestions (optional)                                      #
+##############################################################################
+if [[ -z ${NO_BLE_SH:-} ]]; then
+  BLE_HOME="$HOME/.local/share/ble.sh"
+  if [[ -s $BLE_HOME/ble.sh ]]; then
+    _safe_source "$BLE_HOME/ble.sh" --noattach        # lazy attach
+    ble/util/idle.push 'ble-attach' 2>/dev/null || true
+  fi
+fi
+
+##############################################################################
+# 6 · fzf key-bindings & completions                                         #
+##############################################################################
+_safe_source "$HOME/.fzf.bash"
+
+##############################################################################
+# 7 · ROS 2 Humble helper (underlay-once, overlay-on-cd, zero-latency)       #
+##############################################################################
+_ros_underlay_done=       # flag → have we already sourced the underlay?
+_ros_last_pwd=''          # last directory examined
+_ros_last_ws=''           # last overlay workspace sourced
+
+_ros_auto_source() {
+
+  # 1️⃣ Source /opt/ros/humble exactly once per interactive shell
+  if [[ -z $_ros_underlay_done ]]; then
+    _safe_source /opt/ros/humble/setup.bash
+    _ros_underlay_done=1
+  fi
+
+  # 2️⃣ Skip everything if we haven’t moved since last prompt
+  [[ $PWD == $_ros_last_pwd ]] && return
+  _ros_last_pwd=$PWD
+
+  # 3️⃣ Walk up to the nearest install/setup.bash (overlay)
+  local dir=$PWD ws=
+  while :; do
+    [[ -f "$dir/install/setup.bash" ]] && { ws=$dir; break; }
+    [[ $dir == / ]] && break                    # reached filesystem root
+    dir=${dir%/*} ; [[ -z $dir ]] && dir=/
+  done
+
+  # 4️⃣ (Re)source overlay only if it changed
+  if [[ -n $ws && $ws != "$_ros_last_ws" ]]; then
+    _safe_source "$ws/install/setup.bash"
+    _ros_last_ws=$ws
+  fi
+
+  # 5️⃣ Left all overlays? —› de-source to avoid stale env
+  if [[ -z $ws && -n $_ros_last_ws ]]; then
+    _ros_last_ws=''
+    hash -r        # clear command hash table
+  fi
+}
+
+##############################################################################
+# 8 · PROMPT_COMMAND orchestration                                           #
+##############################################################################
+PROMPT_COMMAND_ITEMS=(_ros_auto_source)          # always run ROS helper
+
+if (( STARSHIP_ENABLED )); then
+  PROMPT_COMMAND_ITEMS+=(starship_precmd)
 else
-    PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
-fi
-unset color_prompt force_color_prompt
-
-# If this is an xterm set the title to user@host:dir
-case "$TERM" in
-xterm*|rxvt*)
-    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
-    ;;
-*)
-    ;;
-esac
-
-# enable color support of ls and also add handy aliases
-if [ -x /usr/bin/dircolors ]; then
-    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
-    alias ls='ls --color=auto'
-    #alias dir='dir --color=auto'
-    #alias vdir='vdir --color=auto'
-
-    alias grep='grep --color=auto'
-    alias fgrep='fgrep --color=auto'
-    alias egrep='egrep --color=auto'
+  PROMPT_COMMAND_ITEMS+=(_fallback_prompt)
 fi
 
-# colored GCC warnings and errors
-#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+PROMPT_COMMAND_ITEMS+=(_fallback_prompt)         # guarantee a prompt
+PROMPT_COMMAND=$(IFS=';'; echo "${PROMPT_COMMAND_ITEMS[*]}")
 
-# some more ls aliases
+##############################################################################
+# 9 · Aliases & helpers                                                      #
+##############################################################################
+# ⏩ Fast jump to main ROS 2 workspace
+alias ws='cd /home/elyamani/Main/programming/ros2_ws'
+
+# Optional smart wrapper: uncomment to allow `ws src/…`
+# ws () { local base=/home/elyamani/Main/programming/ros2_ws; cd "$base/${1:-}"; }
+
+# Quick jump to topmost ROS or Git workspace containing src/
+cs() {
+  local dir="$PWD"
+  while [[ $dir && $dir != / ]]; do
+    [[ -d $dir/.git || -f $dir/install/setup.bash ]] && { cd "$dir"; return; }
+    dir=${dir%/*}
+  done
+  echo "No enclosing workspace found" >&2
+}
+cbs() { cs && colcon build --symlink-install && src; }  # build & re-source
+
+# Common dev shortcuts
+alias cb='colcon build --symlink-install'
+alias src='source install/local_setup.bash'
+alias nvgpu='nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu --format=csv'
+alias dcu='docker compose up -d'
+alias glog='git log --oneline --graph --decorate --all'
+alias gs='git status -sb'
+alias config='/usr/bin/git --git-dir=/home/elyamani/.cfg --work-tree=/home/elyamani'
+
+# Colourised coreutils & grep
+alias ls='ls --color=auto'
 alias ll='ls -alF'
 alias la='ls -A'
 alias l='ls -CF'
+alias grep='grep --color=auto'
 
-# Add an "alert" alias for long running commands.  Use like so:
-#   sleep 10; alert
-alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
-
-# Alias definitions.
-# You may want to put all your additions into a separate file like
-# ~/.bash_aliases, instead of adding them here directly.
-# See /usr/share/doc/bash-doc/examples in the bash-doc package.
-
-if [ -f ~/.bash_aliases ]; then
-    . ~/.bash_aliases
+# kubectl helpers (if present)
+if command -v kubectl >/dev/null; then
+  alias kctx='kubectl config current-context'
+  complete -F __start_kubectl kctx
 fi
 
-# enable programmable completion features (you don't need to enable
-# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
-# sources /etc/bash.bashrc).
-if ! shopt -oq posix; then
-  if [ -f /usr/share/bash-completion/bash_completion ]; then
-    . /usr/share/bash-completion/bash_completion
-  elif [ -f /etc/bash_completion ]; then
-    . /etc/bash_completion
-  fi
+# UTF-8 pager
+export LESSCHARSET=utf-8
+
+##############################################################################
+# 10 · Gitstatus threading (Starship reads this)                             #
+##############################################################################
+# export GITSTATUS_NUM_THREADS=4   # tune if large repos burn CPU
+
+##############################################################################
+# 11 · Startup profilers (debug only)                                        #
+##############################################################################
+alias brc-prof='PS4="+${BASH_SOURCE}:${LINENO}:${FUNCNAME[0]}() " bash -xic ""; echo'
+brc-prof-t() {
+  local awk_script='BEGIN{OFS="\t"} /^\+[0-9]+\.[0-9]+/{now=substr($1,2);sub(/^[^ ]+ /,"");if(prev){printf "%.3f ms\t%s\n",(now-prev)*1000,$0};prev=now}'
+  PS4='+$EPOCHREALTIME ' bash -xic "" 2>&1 | awk "$awk_script"
+}
+
+##############################################################################
+# 12 · Friendly greeting (runs once per interactive shell)                   #
+##############################################################################
+if [[ -z ${_BASH_READY_GREETING_SHOWN:-} ]] && printf '%(%H)T' -1 &>/dev/null
+then
+  printf '\e[32m[Bash ready] %(%H:%M:%S)T — happy coding, Muhammed!\e[0m\n' -1
+  _BASH_READY_GREETING_SHOWN=1
 fi
-eval "$(starship init bash)"
-
-# If not running interactively, don't do anything
-case $- in
-	*i*) ;;
-	*) return ;;
-esac
-
-# Path to the bash it configuration
-export BASH_IT="/home/elyamani/.bash_it"
-
-# Lock and Load a custom theme file.
-# Leave empty to disable theming.
-# location "$BASH_IT"/themes/
-# export BASH_IT_THEME='bobby'
-export BASH_IT_THEME='powerline-multiline'
-
-# Some themes can show whether `sudo` has a current token or not.
-# Set `$THEME_CHECK_SUDO` to `true` to check every prompt:
-#THEME_CHECK_SUDO='true'
-
-# (Advanced): Change this to the name of your remote repo if you
-# cloned bash-it with a remote other than origin such as `bash-it`.
-# export BASH_IT_REMOTE='bash-it'
-
-# (Advanced): Change this to the name of the main development branch if
-# you renamed it or if it was changed for some reason
-# export BASH_IT_DEVELOPMENT_BRANCH='master'
-
-# Your place for hosting Git repos. I use this for private repos.
-export GIT_HOSTING='git@git.domain.com'
-
-# Don't check mail when opening terminal.
-unset MAILCHECK
-
-# Change this to your console based IRC client of choice.
-export IRC_CLIENT='irssi'
-
-# Set this to the command you use for todo.txt-cli
-export TODO="t"
-
-# Set this to the location of your work or project folders
-#BASH_IT_PROJECT_PATHS="${HOME}/Projects:/Volumes/work/src"
-
-# Set this to false to turn off version control status checking within the prompt for all themes
-export SCM_CHECK=true
-# Set to actual location of gitstatus directory if installed
-#export SCM_GIT_GITSTATUS_DIR="$HOME/gitstatus"
-# per default gitstatus uses 2 times as many threads as CPU cores, you can change this here if you must
-#export GITSTATUS_NUM_THREADS=8
-
-# Set Xterm/screen/Tmux title with only a short hostname.
-# Uncomment this (or set SHORT_HOSTNAME to something else),
-# Will otherwise fall back on $HOSTNAME.
-#export SHORT_HOSTNAME=$(hostname -s)
-
-# Set Xterm/screen/Tmux title with only a short username.
-# Uncomment this (or set SHORT_USER to something else),
-# Will otherwise fall back on $USER.
-#export SHORT_USER=${USER:0:8}
-
-# If your theme use command duration, uncomment this to
-# enable display of last command duration.
-#export BASH_IT_COMMAND_DURATION=true
-# You can choose the minimum time in seconds before
-# command duration is displayed.
-#export COMMAND_DURATION_MIN_SECONDS=1
-
-# Set Xterm/screen/Tmux title with shortened command and directory.
-# Uncomment this to set.
-#export SHORT_TERM_LINE=true
-
-# Set vcprompt executable path for scm advance info in prompt (demula theme)
-# https://github.com/djl/vcprompt
-#export VCPROMPT_EXECUTABLE=~/.vcprompt/bin/vcprompt
-
-# (Advanced): Uncomment this to make Bash-it reload itself automatically
-# after enabling or disabling aliases, plugins, and completions.
-# export BASH_IT_AUTOMATIC_RELOAD_AFTER_CONFIG_CHANGE=1
-
-# Uncomment this to make Bash-it create alias reload.
-# export BASH_IT_RELOAD_LEGACY=1
-
-# Load Bash It
-source "$BASH_IT"/bash_it.sh
-alias config='/usr/bin/git --git-dir=/home/elyamani/.cfg --work-tree=/home/elyamani'
-
-[ -f ~/.fzf.bash ] && source ~/.fzf.bash
