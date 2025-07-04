@@ -107,7 +107,6 @@ if command -v starship >/dev/null 2>&1; then
 fi
 
 # Minimal fallback prompt if Starship is unavailable
-# _fallback_prompt() { PS1='[\u@\h \W]\$ '; }
 _fallback_prompt() { PS1='[\u@\h \W${ROS_WS_NAME:+ $ROS_WS_NAME}]\$ '; }
 
 # Clean up temp variable
@@ -143,9 +142,6 @@ unset _ble_dir                                         # tidy env
 ##############################################################################
 _safe_source "$HOME/.fzf.bash"
 
-##############################################################################
-# 8 · ROS 2 Humble helper (underlay once, overlay on dir change)             #
-##############################################################################
 ##############################################################################
 # 8 · ROS 2 Humble — 0-cost underlay, auto-overlay, prompt landmark          #
 #                                                                            #
@@ -224,18 +220,6 @@ _ros2_overlay_on_cd() {
   fi
 }
 
-# 3 ── add overlay hook to PROMPT_COMMAND once (no duplicates) ───────────── #
-if [[ :$PROMPT_COMMAND: != *:_ros2_overlay_on_cd:* ]]; then
-  PROMPT_COMMAND="_ros2_overlay_on_cd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
-fi
-
-##############################################################################
-# Add the overlay detector to PROMPT_COMMAND (once)                          #
-##############################################################################
-if [[ :$PROMPT_COMMAND: != *:_ros2_overlay_on_cd:* ]]; then
-  PROMPT_COMMAND="_ros2_overlay_on_cd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
-fi
-
 ##############################################################################
 # 9 · PROMPT_COMMAND orchestration                                           #
 ##############################################################################
@@ -257,9 +241,11 @@ PROMPT_COMMAND=$(IFS=';'; echo "${PROMPT_COMMAND_ITEMS[*]}")
 # 10 · Aliases & helpers                                                     #
 ##############################################################################
 alias ws='cd ~/Main/programming/ros2_ws'
+# Change to the enclosing ROS 2 workspace (install/setup.bash) 
 cs()  { local d=$PWD; while [[ $d && $d != / ]]; do
-          [[ -d $d/.git || -f $d/install/setup.bash ]] && { cd "$d"; return; }
+          [[ -f $d/install/setup.bash ]] && { cd "$d"; return; }
           d=${d%/*}; done; printf 'No enclosing workspace found\n' >&2; }
+
 cbs() { cs && colcon build --symlink-install && src; }
 alias cb='colcon build --symlink-install'
 alias src='source install/local_setup.bash'
