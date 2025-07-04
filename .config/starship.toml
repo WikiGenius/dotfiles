@@ -1,0 +1,5 @@
+[custom.ros_ws]
+command = "printf %s \"$ROS_WS_NAME\""
+when    = '[[ -n "$ROS_WS_NAME" ]]'
+format  = " [$output]($style)"
+style   = "bright-blue"
