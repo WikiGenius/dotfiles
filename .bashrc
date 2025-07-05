@@ -220,6 +220,12 @@ _ros2_overlay_on_cd() {
   fi
 }
 
+# ❹ Environment variables you may want to *persist* across shells
+#     (Everything else — ROS_VERSION, ROS_DISTRO, PYTHON path, etc. —
+#      is already set for you by setup.bash; don’t duplicate it.)
+export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}       # isolate DDS traffic per team
+export ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}  # 1 ⇒ keep comms on loopback
+
 ##############################################################################
 # 9 · PROMPT_COMMAND orchestration                                           #
 ##############################################################################
@@ -256,6 +262,9 @@ alias gs='git status -sb'
 alias config='/usr/bin/git --git-dir="$HOME/.cfg" --work-tree="$HOME"'
 alias ls='ls --color=auto'; alias ll='ls -alF'; alias la='ls -A'; alias l='ls -CF'
 alias grep='grep --color=auto'
+# ❺ Convenience aliases
+alias ros-env='printenv | grep -i "^ROS" | sort'
+alias ros-ws='echo "Current ROS workspace: ${_ros2_last_ws:-<none>}";'
 
 if command -v kubectl >/dev/null 2>&1; then
   alias kctx='kubectl config current-context'
@@ -265,7 +274,48 @@ fi
 export LESSCHARSET=utf-8
 
 ##############################################################################
-# 11 · Startup profilers (debug only)                                        #
+# 11 · TOOLCHAIN PATHS — Gazebo & TurtleBot3                                 #
+##############################################################################
+
+# — Blender (only if installed) —
+_blender_dir="/opt/blender-4.1.0-linux-x64"
+[[ -d $_blender_dir ]] && PATH="$_blender_dir:$PATH" && export PATH
+unset _blender_dir
+
+# — Gazebo plugin / model / resource paths —
+_roslib="/opt/ros/humble/lib"
+[[ ":$GAZEBO_PLUGIN_PATH:" != *":$_roslib:"* ]] && \
+  export GAZEBO_PLUGIN_PATH="$_roslib${GAZEBO_PLUGIN_PATH:+:$GAZEBO_PLUGIN_PATH}"
+
+# Use ros2-query instead of hard-coding install prefix;
+# works for overlay workspaces too.
+_tb3_models="$(ros2 pkg prefix turtlebot3_gazebo 2>/dev/null)/share/turtlebot3_gazebo/models"
+[[ -d $_tb3_models ]] && \
+  export GAZEBO_MODEL_PATH="${GAZEBO_MODEL_PATH:+$GAZEBO_MODEL_PATH:}$_tb3_models"
+unset _tb3_models _roslib
+
+# Keep system resources *first*; add ours only if not present
+_gp_sys="/usr/share/gazebo-11"
+[[ ":$GAZEBO_RESOURCE_PATH:" != *":$_gp_sys:"* ]] && \
+  export GAZEBO_RESOURCE_PATH="${GAZEBO_RESOURCE_PATH:+$GAZEBO_RESOURCE_PATH:}$_gp_sys"
+unset _gp_sys
+
+# — TurtleBot3 model / namespace —
+export TURTLEBOT3_MODEL=${TURTLEBOT3_MODEL:-burger}
+# Uncomment if you ever run multiple bots
+# export TURTLEBOT3_NAMESPACE=${TURTLEBOT3_NAMESPACE:-default_ns}
+
+# — Qt backend fix: enable only under Wayland —
+if [[ ${XDG_SESSION_TYPE:-x11} == "wayland" ]]; then
+  export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}
+fi
+
+# — Source TurtleBot3 workspace & Gazebo setup if present —
+_safe_source "$HOME/Main/programming/ros2_ws/turtlebot3_ws/install/setup.bash"
+_safe_source "/usr/share/gazebo/setup.sh"
+
+##############################################################################
+# 12 · Startup profilers (debug only)                                        #
 ##############################################################################
 alias brc-prof='PS4="+${BASH_SOURCE}:${LINENO}:${FUNCNAME[0]}() " bash -xic ""; echo'
 
@@ -282,7 +332,7 @@ brc-prof-t() {
 }
 
 ##############################################################################
-# 12 · Friendly greeting (once per shell)                                    #
+# 13 · Friendly greeting (once per shell)                                    #
 ##############################################################################
 if [[ -z ${_BASH_READY_GREETING_SHOWN:-} ]] && printf '%(%H)T' -1 &>/dev/null
 then
