@@ -332,13 +332,59 @@ brc-prof-t() {
 }
 
 ##############################################################################
-# 13 · Friendly greeting (once per shell)                                    #
+# 13 · Create venv                                      
+##############################################################################
+# ----------------------------------------------------------------------
+# Python venv helper:  `venv [<dir>]`
+# ----------------------------------------------------------------------
+# * Creates <dir> (default .venv) with 'python3 -m venv' if it is missing
+# * Activates it (source <dir>/bin/activate)
+# * If already active, running `venv` again de‑activates.
+#
+# Drop this in ~/.bashrc, then run `source ~/.bashrc` or open a new shell.
+# ----------------------------------------------------------------------
+
+venv () {
+    local default=".venv"
+    local VENV_DIR="${1:-$default}"
+
+    # If we're **already** in a venv, toggle off first
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        if [[ "$VIRTUAL_ENV" == "$PWD/$VENV_DIR" ]]; then
+            echo "Deactivating virtual‑env: $VIRTUAL_ENV"
+            deactivate
+            return
+        else
+            echo "Leaving active env $VIRTUAL_ENV && switching..."
+            deactivate
+        fi
+    fi
+
+    # Create if missing
+    if [[ ! -d "$VENV_DIR" ]]; then
+        echo "Creating new virtual‑env ➜  $VENV_DIR"
+        python3 -m venv "$VENV_DIR"          # <-- Method A
+    fi
+
+    # Activate
+    echo "Activating virtual‑env ➜  $VENV_DIR"
+    source "$VENV_DIR/bin/activate"
+}
+
+
+
+##############################################################################
+# 14 · Friendly greeting (once per shell)                                    #
 ##############################################################################
 if [[ -z ${_BASH_READY_GREETING_SHOWN:-} ]] && printf '%(%H)T' -1 &>/dev/null
 then
   printf '\e[32m[Bash ready] %(%H:%M:%S)T — happy coding, Muhammed!\e[0m\n' -1
   _BASH_READY_GREETING_SHOWN=1
 fi
+
+
+
+
 
 # -------------------------------  end  --------------------------------------
 # Clear init mark → subsequent commands get recorded
