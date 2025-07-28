@@ -274,10 +274,16 @@ fi
 export LESSCHARSET=utf-8
 
 
-# --- CUDA 12.9 ---
-export PATH=/usr/local/cuda-12.9/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-12.9/lib64:${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+##############################################################################
+# CUDA                                 #
+##############################################################################
+export CUDA_HOME=/usr/local/cuda-11.8
+# export CUDA_HOME=/usr/local/cuda-12.9
 
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+
+export PATH=$HOME/.local/bin:$PATH
 
 ##############################################################################
 # 11 · TOOLCHAIN PATHS — Gazebo & TurtleBot3                                 #
@@ -374,7 +380,7 @@ venv () {
 
     # Activate
     echo "Activating virtual‑env ➜  $VENV_DIR"
-    source "$VENV_DIR/bin/activate"
+# source "$VENV_DIR/bin/activate"  # commented out by conda initialize
 }
 
 
@@ -392,6 +398,19 @@ fi
 
 
 
-# -------------------------------  end  --------------------------------------
-# Clear init mark → subsequent commands get recorded
-unset _BRC_INIT
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/home/elyamani/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/home/elyamani/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/home/elyamani/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/home/elyamani/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
+

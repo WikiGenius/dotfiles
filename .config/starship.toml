@@ -3,3 +3,7 @@ command = "printf %s \"$ROS_WS_NAME\""
 when    = '[[ -n "$ROS_WS_NAME" ]]'
 format  = " [$output]($style)"
 style   = "bright-blue"
+[conda]
+symbol = "🅒 "
+style = "green"
+ignore_base = false
