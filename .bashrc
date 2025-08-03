@@ -247,14 +247,15 @@ PROMPT_COMMAND=$(IFS=';'; echo "${PROMPT_COMMAND_ITEMS[*]}")
 # 10 · Aliases & helpers                                                     #
 ##############################################################################
 alias ws='cd ~/Main/programming/ros2_ws'
+alias src='source install/local_setup.bash'
+alias cb='colcon build --symlink-install'
+
 # Change to the enclosing ROS 2 workspace (install/setup.bash) 
 cs()  { local d=$PWD; while [[ $d && $d != / ]]; do
           [[ -f $d/install/setup.bash ]] && { cd "$d"; return; }
           d=${d%/*}; done; printf 'No enclosing workspace found\n' >&2; }
 
-cbs() { cs && colcon build --symlink-install && src; }
-alias cb='colcon build --symlink-install'
-alias src='source install/local_setup.bash'
+cbs() { cs && cb && src; }
 alias nvgpu='nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu --format=csv'
 alias dcu='docker compose up -d'
 alias glog='git log --oneline --graph --decorate --all'
@@ -277,8 +278,8 @@ export LESSCHARSET=utf-8
 ##############################################################################
 # CUDA                                 #
 ##############################################################################
-export CUDA_HOME=/usr/local/cuda-11.8
-# export CUDA_HOME=/usr/local/cuda-12.9
+# export CUDA_HOME=/usr/local/cuda-11.8
+export CUDA_HOME=/usr/local/cuda-12.9
 
 export PATH=$CUDA_HOME/bin:$PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
@@ -380,7 +381,7 @@ venv () {
 
     # Activate
     echo "Activating virtual‑env ➜  $VENV_DIR"
-# source "$VENV_DIR/bin/activate"  # commented out by conda initialize
+source "$VENV_DIR/bin/activate"  # commented out by conda initialize
 }
 
 
@@ -414,3 +415,4 @@ fi
 unset __conda_setup
 # <<< conda initialize <<<
 
+# export PATH="/home/elyamani/.pixi/bin:$PATH"
